@@ -84,7 +84,7 @@
 <div id="app"><div class="loading">⏳ Mengambil data dari 3 sumber (wttr.in • Open-Meteo • USGS)…</div></div>
 
 <footer>
-  Sumber: <b>wttr.in</b> (agregator multi-model) × <b>Open-Meteo</b> (ECMWF/ICON/GFS) × <b>USGS</b> (gempa).<br>
+  Sumber: <b>BMKG</b> (resmi 🇮🇩) × <b>ECMWF</b> × <b>GFS</b> × <b>ICON</b> × <b>wttr.in</b> × <b>USGS</b> (gempa).<br>
   Validasi silang: ramalan dianggap kuat bila ≥2 sumber sepakat.<br>
   Untuk peringatan resmi tetap pantau <a href="https://www.bmkg.go.id" target="_blank" rel="noopener">BMKG</a> •
   Auto-refresh tiap 30 menit
@@ -109,6 +109,14 @@ const FOKUS = [
   ["Deket","Lamongan","koridor Gresik-Lamongan",-7.10,112.45]
 ];
 const OM_EXTRA = { "Gresik":[-7.18,112.65], "Lamongan":[-7.12,112.42], "Surabaya":[-7.26,112.75], "Mojokerto":[-7.47,112.43] };
+const BMKG_ADM4 = {
+  "Menganti":"35.25.13.2013", "Benjeng":"35.25.04.2009",
+  "Driyorejo":"35.25.15.2006", "Balongpanggang":"35.25.02.2019",
+  "Lamongan Kota":"35.24.22.1020", "Babat":"35.24.05.1003",
+  "Sugio":"35.24.12.2007", "Deket":"35.24.25.2012"
+};
+const WMO_DESC = {0:"Cerah",1:"Cerah",2:"Berawan",3:"Mendung",45:"Kabut",48:"Kabut",51:"Gerimis",53:"Gerimis",55:"Gerimis lebat",61:"Hujan ringan",63:"Hujan sedang",65:"Hujan lebat",80:"Hujan ringan",81:"Hujan sedang",82:"Hujan lebat",95:"Badai petir",96:"Badai petir",99:"Badai petir"};
+const MODELS = [["ECMWF","ecmwf_ifs","🇪🇺"],["GFS","gfs_global","🇺🇸"],["ICON","icon_global","🇩🇪"]];
 const RAIN = new Set(["176","263","266","293","296","299","302","305","308","311","314","350","353","356","359","362","365","368","371","374","377","384","386","389"]);
 const HEAVY = new Set(["299","302","305","308","311","314","356","359","365","384","386","389"]);
 const WMO_RAIN = new Set([51,53,55,61,63,65,66,67,80,81,82,95,96,99]);
@@ -174,6 +182,39 @@ async function fetchQuakes(){
     }));
   } catch(e){ return null; }
 }
+
+async function fetchBMKG(adm4){
+  try{
+    const r = await fetch("https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4="+adm4);
+    if (!r.ok) throw 0;
+    const d0 = (await r.json()).data[0];
+    const days = d0.cuaca.map(slots => {
+      let tp=0, tmax=-99; const vote={};
+      slots.forEach(s=>{
+        tp += (s.tp||0);
+        if ((s.t||-99) > tmax) tmax = s.t;
+        const k = s.weather_desc || "?";
+        vote[k] = (vote[k]||0)+1;
+      });
+      const desc = Object.entries(vote).sort((a,b)=>b[1]-a[1])[0][0];
+      return { date: slots[0]?slots[0].local_datetime.slice(0,10):"?",
+               tp: Math.round(tp*10)/10, desc, tmax };
+    });
+    return { desa:d0.lokasi.desa, kecamatan:d0.lokasi.kecamatan, days };
+  }catch(e){ return null; }
+}
+
+async function fetchOMModel(lat, lon, model){
+  try{
+    const u = "https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon
+      + "&daily=precipitation_sum,weathercode&timezone=Asia%2FJakarta&forecast_days=3&models="+model;
+    const r = await fetch(u);
+    if (!r.ok) throw 0;
+    return (await r.json()).daily || null;
+  }catch(e){ return null; }
+}
+
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
 
 /* ============ ANALISIS ============ */
 function correlate(data){
@@ -274,6 +315,27 @@ async function load(){
   // 3) USGS gempa
   const quakes = await fetchQuakes();
 
+  // 4) BMKG per titik fokus (stagger anti rate-limit)
+  const BMKG = {};
+  for (const n of Object.keys(BMKG_ADM4)){
+    BMKG[n] = await fetchBMKG(BMKG_ADM4[n]);
+    await sleep(350);
+  }
+
+  // 5) Arena model: ECMWF vs GFS vs ICON untuk Gresik & Lamongan
+  const ARENA_PTS = [
+    {name:"Gresik", lat:-7.18, lon:112.65, bmkg:"Menganti"},
+    {name:"Lamongan", lat:-7.12, lon:112.42, bmkg:"Lamongan Kota"}
+  ];
+  const ARENA = {};
+  await Promise.all(ARENA_PTS.map(async p=>{
+    const mods = {};
+    await Promise.all(MODELS.map(async ([label, code])=>{
+      mods[label] = await fetchOMModel(p.lat, p.lon, code);
+    }));
+    ARENA[p.name] = { mods, bmkg: BMKG[p.bmkg], wttr: W[p.name] };
+  }));
+
   btn.disabled = false; btn.textContent = "↻ Refresh";
   if (!W["Gresik"] || !W["Lamongan"]){
     app.innerHTML = '<div class="card err">❌ Gagal mengambil data Gresik/Lamongan. Cek koneksi lalu refresh.</div>';
@@ -313,6 +375,55 @@ async function load(){
   }
   h += "</div>";
 
+  // --- ARENA MODEL ---
+  const rainIcon = (tp, desc) => tp>=20 ? "⛈️" : tp>1 ? "🌧️" : /hujan|petir/i.test(desc||"") ? "🌧️" : /berawan|mendung/i.test(desc||"") ? "⛅" : "☀️";
+  let arenaH = '<div class="card"><h2>🏟️ Arena Model <small>BMKG 🇮🇩 vs 4 model independen • mana yang beda?</small></h2>';
+  let bedaCount = 0;
+  for (const p of ARENA_PTS){
+    const A = ARENA[p.name];
+    arenaH += '<h3 style="font-size:13px;margin:12px 0 6px;color:var(--text)">📍 '+esc(p.name)+'</h3>';
+    arenaH += '<div style="overflow-x:auto"><table style="min-width:640px"><tr><th>Hari</th><th>BMKG 🇮🇩</th><th>ECMWF 🇪🇺</th><th>GFS 🇺🇸</th><th>ICON 🇩🇪</th><th>wttr.in 🌐</th><th>Kesepakatan</th></tr>';
+    for (let i=0;i<3;i++){
+      const cells = [], votes = [];
+      const b = A.bmkg && A.bmkg.days[i];
+      const bRain = b ? b.tp>1 : null;
+      cells.push(b ? rainIcon(b.tp,b.desc)+" "+esc(b.desc)+"<br><b>"+b.tp+" mm</b>" : "—");
+      if (bRain!==null) votes.push({src:"BMKG", rain:bRain});
+      for (const [label] of MODELS){
+        const md = A.mods[label];
+        if (md && md.precipitation_sum){
+          const tp = md.precipitation_sum[i]||0, wc = (md.weathercode||[])[i];
+          const desc = WMO_DESC[wc] || ("Kode "+wc);
+          cells.push(rainIcon(tp,desc)+" "+esc(desc)+"<br><b>"+(+tp).toFixed(1)+" mm</b>");
+          votes.push({src:label, rain:tp>1});
+        } else cells.push("—");
+      }
+      const w = A.wttr && A.wttr.days[i];
+      const wRain = w ? isRain(w) : null;
+      cells.push(w ? rainIcon(w.rain_mm,w.desc)+" "+esc(w.desc)+"<br><b>"+w.rain_mm+" mm</b>" : "—");
+      if (wRain!==null) votes.push({src:"wttr", rain:wRain});
+      const nRain = votes.filter(v=>v.rain).length;
+      const agreePct = votes.length ? Math.round(100*Math.max(nRain, votes.length-nRain)/votes.length) : 0;
+      const consensus = votes.length ? (nRain >= votes.length/2) : null;
+      let flag = "";
+      if (bRain!==null && consensus!==null && votes.length>=4 && bRain!==consensus){
+        bedaCount++;
+        flag = '<br><span class="badge b-yellow">⚠️ BEDA DG BMKG</span>';
+      }
+      const dt = b ? b.date.slice(5) : (w ? String(w.date).slice(5) : "?");
+      arenaH += "<tr><td><b>"+esc(dt)+"</b></td>"+cells.map(c=>"<td>"+c+"</td>").join("")
+        + '<td><b class="'+(agreePct>=80?"agree-yes":"agree-no")+'">'+agreePct+'%</b>'+flag+"</td></tr>";
+    }
+    arenaH += "</table></div>";
+  }
+  arenaH += '<div class="notes" style="margin-top:8px;font-size:12px;color:var(--muted)">'
+    + 'Kesepakatan = % sumber yang sepakat hujan/tidak hujan. '
+    + (bedaCount
+        ? '<span style="color:var(--yellow)">⚠️ Ditemukan <b>'+bedaCount+'</b> hari di mana mayoritas model independen BERBEDA dengan BMKG — layak diperhatikan.</span>'
+        : '✅ Semua model selaras dengan BMKG untuk 3 hari ke depan.')
+    + '</div></div>';
+  h += arenaH;
+
   // --- SKOR KORELASI ---
   h += '<div class="card"><h2>📊 Skor Korelasi Regional <span class="src-tag">wttr.in</span></h2><div class="score-wrap">'
     + '<div class="score-ring" style="--p:'+score+";--sc:"+color+'"><div class="score-inner"><b>'+score+'</b><span>/100</span></div></div>'
@@ -331,7 +442,8 @@ async function load(){
       + '<div class="big">'+esc(v.temp)+'°C</div><div class="desc">'+esc(v.now)+'</div>'
       + '<div class="meta">Terasa '+esc(v.feels)+'° • Lembap '+esc(v.hum)+'%<br>Angin '+esc(v.wind)+' km/j<br>'
       + 'Hujan hari ini: '+esc(d.rain_mm ?? "?")+' mm</div>'
-      + '<div class="risk">⚠️ '+esc(risk)+'</div>';
+      + '<div class="risk">⚠️ '+esc(risk)+'</div>'
+      + (BMKG[name] && BMKG[name].days[0] ? '<div class="src7">🇮🇩 BMKG: '+esc(BMKG[name].days[0].desc)+' '+BMKG[name].days[0].tp+' mm</div>' : '');
     if (st){
       h += '<div class="src7">🌧️ 7 hari ke depan (model 2): <b>'+st.fut.toFixed(0)+' mm</b><br>'
         + (nRed ? '<span class="badge b-red">'+nRed+' siaga</span>' : '')
@@ -403,7 +515,7 @@ async function load(){
   h += "</div></div>";
 
   app.innerHTML = h;
-  document.getElementById("subhead").textContent = "Update: "+now+" • 3 sumber • "+Object.keys(W).length+" titik wttr, "+Object.keys(OM).length+" titik Open-Meteo";
+  document.getElementById("subhead").textContent = "Update: "+now+" • 6 sumber • "+Object.keys(W).length+" wttr, "+Object.keys(BMKG).filter(k=>BMKG[k]).length+" BMKG, arena 5-model";
 }
 
 document.getElementById("refreshBtn").onclick = load;
