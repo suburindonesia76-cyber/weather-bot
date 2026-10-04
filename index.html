@@ -151,7 +151,7 @@ const FOKUS = [
   ["Lamongan Kota","Lamongan","dekat muara Kali Lamong",-7.12,112.42],
   ["Babat","Lamongan","hulu, kiriman Mojokerto",-7.10,112.18],
   ["Sugio","Lamongan","pernah peringatan BMKG",-7.13,112.28],
-  ["Deket","Lamongan","koridor Gresik-Lamongan",-7.10,112.45]
+  ["Deket","Lamongan","koridor Gresik-Lamongan",-7.10,112.45],
   ["Mantup","Lamongan","selatan, perbatasan Mojokerto",-7.30,112.34]
 ];
 const OM_EXTRA = { "Gresik":[-7.18,112.65], "Lamongan":[-7.12,112.42], "Surabaya":[-7.26,112.75], "Mojokerto":[-7.47,112.43] };
@@ -358,44 +358,37 @@ async function load(){
   btn.disabled = true; btn.textContent = "⏳ Memuat…";
   const app = document.getElementById("app");
 
-  // 1) wttr.in — semua titik paralel
+  // 1-5) SEMUA sumber diambil PARALEL (bukan berurutan) — waktu muat = batch paling lambat saja
   const wTargets = [...Object.keys(STATIONS), "Gresik", "Lamongan", ...FOKUS.map(f=>f[0])]
     .filter((v,i,a)=>a.indexOf(v)===i);
-  const wRes = await Promise.all(wTargets.map(fetchWttr));
-  const W = {}; wTargets.forEach((t,i)=>{ if(wRes[i]) W[t]=wRes[i]; });
-
-  // 2) Open-Meteo — titik fokus + ekstra
   const omNames = [...FOKUS.map(f=>f[0]), ...Object.keys(OM_EXTRA)];
   const omCoords = {}; FOKUS.forEach(f=>omCoords[f[0]]=[f[3],f[4]]);
   Object.assign(omCoords, OM_EXTRA);
-  const omRes = await Promise.all(omNames.map(n=>fetchOM(omCoords[n][0], omCoords[n][1])));
-  const OM = {}; omNames.forEach((n,i)=>{ if(omRes[i]) OM[n]=omRes[i]; });
-
-  // 3) USGS gempa
-  const quakes = await fetchQuakes();
-  AI_DATA.quakes = quakes || [];
-
-  // 4) BMKG per titik fokus (stagger anti rate-limit)
-  const BMKG = {};
-  for (const n of Object.keys(BMKG_ADM4)){
-    BMKG[n] = await fetchBMKG(BMKG_ADM4[n]);
-    await sleep(350);
-  }
-  AI_DATA.bmkg = BMKG;
-
-  // 5) Arena model: ECMWF vs GFS vs ICON untuk Gresik & Lamongan
   const ARENA_PTS = [
     {name:"Gresik", lat:-7.18, lon:112.65, bmkg:"Menganti"},
     {name:"Lamongan", lat:-7.12, lon:112.42, bmkg:"Lamongan Kota"}
   ];
-  const ARENA = {};
-  await Promise.all(ARENA_PTS.map(async p=>{
-    const mods = {};
-    await Promise.all(MODELS.map(async ([label, code])=>{
-      mods[label] = await fetchOMModel(p.lat, p.lon, code);
-    }));
-    ARENA[p.name] = { mods, bmkg: BMKG[p.bmkg], wttr: W[p.name] };
-  }));
+  const bmkgNames = Object.keys(BMKG_ADM4);
+
+  const [wRes, omRes, quakes, bmkgPairs, arenaPairs] = await Promise.all([
+    Promise.all(wTargets.map(fetchWttr)),
+    Promise.all(omNames.map(n=>fetchOM(omCoords[n][0], omCoords[n][1]))),
+    fetchQuakes(),
+    // BMKG: mulai ber-stagger (anti rate-limit) tapi tunggunya paralel
+    Promise.all(bmkgNames.map((n,i)=>(async()=>{ await sleep(i*300); return [n, await fetchBMKG(BMKG_ADM4[n])]; })())),
+    Promise.all(ARENA_PTS.map(async p=>{
+      const mods = {};
+      await Promise.all(MODELS.map(async ([label, code])=>{ mods[label] = await fetchOMModel(p.lat, p.lon, code); }));
+      return [p.name, {mods, bmkgName:p.bmkg, wttrName:p.name}];
+    }))
+  ]);
+
+  const W = {}; wTargets.forEach((t,i)=>{ if(wRes[i]) W[t]=wRes[i]; });
+  const OM = {}; omNames.forEach((n,i)=>{ if(omRes[i]) OM[n]=omRes[i]; });
+  AI_DATA.quakes = quakes || [];
+  const BMKG = {}; bmkgPairs.forEach(([n,v])=>{ BMKG[n]=v; });
+  AI_DATA.bmkg = BMKG;
+  const ARENA = {}; arenaPairs.forEach(([name,a])=>{ ARENA[name] = {mods:a.mods, bmkg:BMKG[a.bmkgName], wttr:W[a.wttrName]}; });
 
   btn.disabled = false; btn.textContent = "↻ Refresh";
   if (!W["Gresik"] || !W["Lamongan"]){
@@ -618,7 +611,7 @@ fab.onclick = () => {
   keyBox.style.display = hasKey ? "none" : "block";
   form.style.display = hasKey ? "flex" : "none";
   document.getElementById("chatChips").style.display = hasKey ? "flex" : "none";
-  if (hasKey && !aiHist.length) aiSay("Halo! 👋 Tanya soal keamanan lokasimu — gempa, megathrust, banjir, atau cuaca ekstrem. Aku jawab pakai data live di halaman ini.");
+  if (hasKey && !aiHist.length) aiSay("Halo! 👋 Tanya apa saja — cuaca, gempa/banjir, atau keperluan lainnya. Aku jawab pakai data live di halaman ini.");
 };
 document.getElementById("keySave").onclick = () => {
   const k = document.getElementById("keyInput").value.trim();
@@ -643,7 +636,7 @@ function aiContext(){
     + "- Peringatan aktif: "+al+"\n- Gempa 7 hari terakhir (Asia Tenggara): "+q+"\n"
     + "- Skor korelasi regional: "+AI_DATA.score+"/100\n- Prakiraan BMKG hari ini: "+b;
 }
-const AI_SYS = `Kamu asisten kebencanaan untuk warga Gresik & Lamongan, Jawa Timur. Jawab pertanyaan soal keamanan lokasi, risiko gempa (termasuk megathrust Sunda yang ramai dibahas), banjir, dan cuaca ekstrem.
+const AI_SYS = `Kamu asisten warga Gresik & Lamongan, Jawa Timur. Keahlian utamamu: cuaca, kebencanaan (keamanan lokasi, risiko gempa termasuk megathrust Sunda yang ramai dibahas, banjir, cuaca ekstrem). Kamu juga melayani keperluan umum lainnya (info praktis, penjelasan, tanya-jawab biasa) dengan ramah.
 
 KONTEKS GEOGRAFI (pakai untuk menjawab):
 - Gresik & Lamongan di pesisir utara Jawa Timur, dataran rendah, dilewati Kali Lamong (risiko banjir kiriman dari hulu/Mojokerto).
@@ -660,9 +653,27 @@ ATURAN KERAS:
 - Gempa TIDAK bisa diprediksi. Jangan pernah bilang "pasti aman, tidak akan ada gempa" atau "akan ada gempa tanggal X".
 - Jangan menakut-nakuti, jangan menenangkan palsu. Jujur, tenang, edukatif.
 - Peringatan resmi selalu rujuk ke BMKG (bmkg.go.id).
+- Untuk pertanyaan umum di luar cuaca/bencana, jawab normal seperti asisten biasa yang ramah dan membantu.
 - Selipkan tips kesiapsiagaan praktis bila relevan (tas siaga, titik kumpul, kenali jalur evakuasi).
 - Bahasa Indonesia santai, maksimal ~150 kata kecuali diminta detail. Boleh pakai emoji secukupnya.`;
 
+const AI_MODELS = ["gemini-3-flash-preview", "gemini-3.5-flash", "gemini-2.5-flash"];
+async function aiGenerate(key, body){
+  let lastErr = null;
+  for (const m of AI_MODELS){
+    let r;
+    try{
+      r = await fetchT("https://generativelanguage.googleapis.com/v1beta/models/"+m+":generateContent?key="+key, 60000,
+        { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) });
+    }catch(e){ throw e; } // network/timeout: coba model lain tidak membantu
+    const j = await r.json();
+    if (!j.error) return j;
+    const msg = j.error.message || "API error";
+    if (/API key|API_KEY|401|403|PERMISSION_DENIED|quota|429/i.test(msg)) throw new Error(msg); // salah key/kuota: berhenti
+    lastErr = new Error(msg); // model tidak dikenal/dipensiunkan -> coba model berikutnya
+  }
+  throw lastErr || new Error("Semua model AI gagal dihubungi");
+}
 async function aiSend(text){
   if (aiBusy) return;
   aiBusy = true;
@@ -676,10 +687,7 @@ async function aiSend(text){
       contents: aiHist.concat([{ role:"user", parts:[{text}] }]).slice(-12),
       generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
     };
-    const r = await fetchT("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key="+key, 60000,
-      { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) });
-    const j = await r.json();
-    if (j.error) throw new Error(j.error.message || "API error");
+    const j = await aiGenerate(key, body);
     const ans = (j.candidates && j.candidates[0] && j.candidates[0].content.parts[0].text) || "Maaf, tidak ada jawaban.";
     typing.remove();
     aiSay(esc(ans));
