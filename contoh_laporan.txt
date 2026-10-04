@@ -1,0 +1,57 @@
+🌦️ *PRAKIRAAN CUACA REAL-TIME — FOKUS GRESIK & LAMONGAN*
+📅 28 Sep 2026 • 🔗 korelasi 21 titik live
+
+🌏 *LAPIS ASIA (korelasi lintas negara)*
+  🌧️ Bangkok: Patchy rain nearby, 24–37°C — _trough Indochina / monsun barat_
+  🌧️ Singapura: Patchy rain nearby, 24–35°C — _ITCZ / konveksi ekuator_
+  ☀️ Kota Kinabalu: Overcast, 19–29°C — _Borneo — sumber uap air timur_
+  ☀️ Manila: Clear, 22–36°C — _Pasifik barat — seed siklon_
+  🌧️ Darwin: Light rain shower, 17–26°C — _monsun selatan_
+  🌧️ Perth: Patchy rain nearby, 24–29°C — _front Australia — uap dari selatan_
+  🌧️ Medan: Light rain shower, 24–32°C — _SIT / gelombang tropis barat_
+  🌧️ Jakarta: Patchy rain nearby, 27–33°C — _barat Jawa_
+  🌧️ Surabaya: Patchy rain nearby, 25–33°C — _patokan Jatim_
+  🌧️ Kediri: Patchy rain nearby, 22–36°C — _hulu jauh Kali Lamong_
+  🌧️ Mojokerto: Light rain shower, 22–36°C — _hulu Kali Lamong_
+
+🔗 *SINTESIS KORELASI →*
+  🌧️ ITCZ ekuator aktif (Singapura) — zona konveksi bergerak ke barat; uap timur bisa mencapai Jatim via Selat Madura.
+  ⛈️ Trough Indochina aktif (Bangkok) — monsun barat membawa lembap melintasi Sumatera.
+  🌊 Aktivitas selatan (Darwin/Perth) — front dari Australia bisa memicu hujan pesisir utara Jatim saat berbelok.
+  🌫️ Pola barat aktif (Medan/Jakarta hujan) — gelombang tropis bergerak timur, pertimbangkan pengaruh ke Jawa dalam 1–2 hari.
+  ⚠️ Hulu Kali Lamong hujan (Mojokerto, Kediri) — pantau TMA Kali Lamong, dampingan air sampai hilir dalam ~24 jam.
+  🌧️ Fokus area sedang hujan (Lamongan).
+  🌥️ Surabaya hujan — penanda lokal pesisir Jatim lembap.
+  📊 **Skor korelasi regional: 60/100** — risiko hujan tinggi di Gresik–Lamongan 48 jam ke depan
+
+🎯 *FOKUS REAL-TIME — TITIK GRESIK & LAMONGAN*
+  ☀️ *Menganti* (Gresik): Partly Cloudy, 26°C (terasa 27°), lembap 74%, angin 19 km/j | 3 hari: 24–27°C, hujan 0.0mm (puncak 0.0mm @00:00)
+      ↳ risiko lokal: riwayat banjir Kali Lamong (Bringkang, Pranti, Beton)
+  🌧️ *Benjeng* (Gresik): Sunny, 31°C (terasa 34°), lembap 55%, angin 18 km/j | 3 hari: 25–33°C, hujan 0.0mm (puncak 0.0mm @00:00)
+      ↳ risiko lokal: riwayat banjir luapan Kali Lamong, 10 desa pernah terdampak
+  🌧️ *Driyorejo* (Gresik): Patchy rain nearby, 29°C (terasa 32°), lembap 66%, angin 22 km/j | 3 hari: 24–31°C, hujan 0.3mm (puncak 0.3mm @18:00)
+      ↳ risiko lokal: riwayat banjir TMA Kali Surabaya
+  🌧️ *Balongpanggang* (Gresik): Light rain shower, 29°C (terasa 31°), lembap 55%, angin 10 km/j | 3 hari: 22–36°C, hujan 0.5mm (puncak 0.2mm @12:00)
+      ↳ risiko lokal: riwayat banjir kiriman hulu, sawah terendam
+  ☀️ *Lamongan Kota* (Lamongan): Smoky haze, 30°C (terasa 32°), lembap 57%, angin 21 km/j | 3 hari: 24–34°C, hujan 0.0mm (puncak 0.0mm @00:00)
+      ↳ risiko lokal: pusat kabupaten, dekat muara Kali Lamong
+  🌧️ *Babat* (Lamongan): Patchy rain nearby, 32°C (terasa 34°), lembap 46%, angin 13 km/j | 3 hari: 24–37°C, hujan 0.7mm (puncak 0.5mm @21:00)
+      ↳ risiko lokal: hulu, kiriman dari Mojokerto
+  🌧️ *Sugio* (Lamongan): Patchy rain nearby, 32°C (terasa 34°), lembap 46%, angin 13 km/j | 3 hari: 24–37°C, hujan 0.7mm (puncak 0.5mm @21:00)
+      ↳ risiko lokal: pernah masuk peringatan dini BMKG
+  🌧️ *Deket* (Lamongan): Sunny, 30°C (terasa 33°), lembap 60%, angin 20 km/j | 3 hari: 24–34°C, hujan 0.0mm (puncak 0.0mm @00:00)
+      ↳ risiko lokal: koridor Gresik-Lamongan
+
+📅 *PRAKIRAAN 3 HARI GRESIK & LAMONGAN*
+| Tanggal | Gresik | Lamongan | Interpretasi korelasi |
+|---|---|---|---|
+| 2026-09-28 | Clear 27–27°C 0.0mm | Light rain shower 24–37°C 0.7mm | ⛅ potensi hujan lokal |
+| 2026-09-29 | Clear 27–27°C 0.0mm | Patchy rain nearby 23–36°C 0.2mm | ⛅ potensi hujan lokal |
+| 2026-09-30 | Partly Cloudy 27–27°C 0.0mm | Patchy rain nearby 23–37°C 0.1mm | ⛅ potensi hujan lokal |
+
+🛰️ *PERINGATAN & BENCANA (BMKG live)*
+  ✅ Tidak ada peringatan dini aktif terdeteksi untuk Jatim/Gresik/Lamongan.
+
+🏁 *KESIMPULAN FOKUS: 🟡 WASPADA* — skor korelasi 60/100.
+_Sumber: wttr.in live + BMKG. Kiriman otomatis GitHub Actions 2×/hari._
+[warn] TELEGRAM_TOKEN/CHAT belum diset — output hanya stdout
