@@ -10,7 +10,9 @@ import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+import time
+from datetime import datetime, timedelta, timezone
+import urllib.request
 from urllib.parse import quote
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
@@ -242,6 +244,124 @@ def send_telegram(text: str) -> bool:
         return False
 
 # ------------------------------------------------------------------- laporan
+STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".alert_state.json")
+WIB = timezone(timedelta(hours=7))
+
+WATCH_POINTS = [
+    ("Gresik", -7.18, 112.65), ("Lamongan", -7.12, 112.42),
+    ("Menganti", -7.28, 112.58), ("Benjeng", -7.25, 112.50),
+    ("Driyorejo", -7.35, 112.62), ("Balongpanggang", -7.28, 112.42),
+    ("Babat", -7.10, 112.18), ("Sugio", -7.13, 112.28),
+    ("Deket", -7.10, 112.45), ("Surabaya", -7.26, 112.75),
+    ("Mojokerto", -7.47, 112.43),
+]
+
+THRESH = {"quake_mag": 6.0, "rain_mm": 50, "gust_kmh": 80, "temp_c": 40, "cape": 2500}
+
+
+def _get_json(url, timeout=25):
+    req = urllib.request.Request(url, headers={"User-Agent": "weather-bot/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)
+
+
+def load_state():
+    try:
+        with open(STATE_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {"sent": {}}
+
+
+def save_state(s):
+    with open(STATE_FILE, "w") as f:
+        json.dump(s, f)
+
+
+def fetch_quakes_watch(hours=3):
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M")
+    u = ("https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson"
+         f"&starttime={since}&minmagnitude={THRESH['quake_mag']}"
+         "&minlatitude=-11&maxlatitude=12&minlongitude=90&maxlongitude=146&orderby=time&limit=20")
+    return _get_json(u).get("features", [])
+
+
+def fetch_om_watch(lat, lon):
+    u = (f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+         "&daily=precipitation_sum,wind_gusts_10m_max,cape_max,temperature_2m_max"
+         "&timezone=Asia%2FJakarta&forecast_days=3")
+    return _get_json(u)["daily"]
+
+
+def check_extreme():
+    """Mode watch: cek berkala, kirim Telegram HANYA jika ada bencana ekstrem baru."""
+    state = load_state()
+    now_ts = time.time()
+    sent = {k: v for k, v in state.get("sent", {}).items() if now_ts - v < 72 * 3600}
+    new_alerts = []
+
+    try:
+        for f in fetch_quakes_watch():
+            p, qid = f["properties"], f["id"]
+            key = f"quake:{qid}"
+            if key in sent:
+                continue
+            t_wib = datetime.fromtimestamp(p["time"] / 1000, tz=WIB)
+            depth = round(f["geometry"]["coordinates"][2])
+            new_alerts.append((key,
+                "\U0001F30F *GEMPA M%.1f* \u2014 %s\n  Kedalaman %d km, %s WIB" % (
+                    p["mag"], p["place"], depth, t_wib.strftime("%d %b %H:%M"))))
+    except Exception as e:
+        print(f"[warn] quake check: {e}", file=sys.stderr)
+
+    def one(item):
+        name, lat, lon = item
+        try:
+            d = fetch_om_watch(lat, lon)
+            out = []
+            for i in range(min(3, len(d["time"]))):
+                day, dt = d["time"][i], d["time"][i][5:]
+                p = d["precipitation_sum"][i] or 0
+                g = d["wind_gusts_10m_max"][i] or 0
+                c = d["cape_max"][i] or 0
+                t = d["temperature_2m_max"][i] or 0
+                if p >= THRESH["rain_mm"]:
+                    out.append((f"rain:{name}:{day}", "\U0001F30A *%s* %s: hujan ekstrem %.0f mm \u2014 risiko banjir!" % (name, dt, p)))
+                if g >= THRESH["gust_kmh"]:
+                    out.append((f"gust:{name}:{day}", "\U0001F4A8 *%s* %s: angin kencang %.0f km/j" % (name, dt, g)))
+                if t >= THRESH["temp_c"]:
+                    out.append((f"heat:{name}:{day}", "\U0001F321\U0000FE0F *%s* %s: panas ekstrem %.0f\u00B0C" % (name, dt, t)))
+                if c >= THRESH["cape"] and p >= 10:
+                    out.append((f"storm:{name}:{day}", "\u26C8\U0000FE0F *%s* %s: potensi badai hebat (CAPE %.0f J/kg)" % (name, dt, c)))
+            return out
+        except Exception as e:
+            print(f"[warn] om {name}: {e}", file=sys.stderr)
+            return []
+
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        for lst in ex.map(one, WATCH_POINTS):
+            for key, msg in lst:
+                if key not in sent:
+                    new_alerts.append((key, msg))
+
+    if new_alerts:
+        body = "\n\n".join(m for _, m in new_alerts)
+        wib = datetime.now(WIB)
+        text = ("\U0001F6A8 *PERINGATAN DINI* \U0001F6A8\n"
+                f"_{wib:%d %b %Y %H:%M} WIB \u2014 deteksi otomatis, di luar jadwal rutin._\n\n"
+                f"{body}\n\n_Sumber: USGS + Open-Meteo. Selalu cek info resmi BMKG._")
+        if send_telegram(text):
+            for key, _ in new_alerts:
+                sent[key] = now_ts
+            print(f"[watch] {len(new_alerts)} peringatan terkirim")
+        else:
+            print("[watch] gagal kirim telegram", file=sys.stderr)
+    else:
+        print("[watch] tidak ada bencana ekstrem baru")
+    state["sent"] = sent
+    save_state(state)
+
+
 def build_report(data, notes, score, alerts):
     today_id = datetime.now().strftime("%d %b %Y")
     lines = [f"🌦️ *PRAKIRAAN CUACA REAL-TIME — FOKUS GRESIK & LAMONGAN*",
@@ -307,6 +427,10 @@ def build_report(data, notes, score, alerts):
     return "\n".join(lines)
 
 def main():
+    if '--watch' in sys.argv:
+        print('== Weather bot: mode WATCH (peringatan ekstrem) ==')
+        check_extreme()
+        return
     print(f"[run] {datetime.now().isoformat()}")
     targets = list(ASIA_STATIONS.keys()) + ["Gresik", "Lamongan"] + [p[0] for p in FOKUS_POINTS]
     targets = list(dict.fromkeys(targets))  # dedupe

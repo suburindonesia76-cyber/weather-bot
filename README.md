@@ -31,3 +31,10 @@ Tanpa env var, laporan hanya dicetak ke terminal.
 ## Website dashboard
 File `index.html` adalah dashboard web live — data diambil langsung dari wttr.in di browser, tanpa server.
 Aktifkan di Settings → Pages → Deploy from branch → branch `main` → folder `/(root)`.
+
+## Mode watch — peringatan dini langsung
+`python weather_bot.py --watch` mengecek tiap 30 menit (via workflow `watch.yml`)
+dan **hanya** mengirim Telegram jika ada bencana ekstrem yang *baru*:
+- Gempa M≥6.0 di kawasan Asia Tenggara (3 jam terakhir, USGS)
+- Hujan ekstrem ≥50 mm/hari, angin ≥80 km/jam, panas ≥40°C, badai hebat (Open-Meteo)
+- Status terkirim disimpan di `.alert_state.json` agar tidak spam ganda.
