@@ -44,6 +44,7 @@ FOKUS_POINTS = [
     ("Babat", "Lamongan", "hulu, kiriman dari Mojokerto"),
     ("Sugio", "Lamongan", "pernah masuk peringatan dini BMKG"),
     ("Deket", "Lamongan", "koridor Gresik-Lamongan"),
+    ("Mantup", "Lamongan", "selatan, perbatasan Mojokerto"),
 ]
 
 RAIN_CODES = {"176","263","266","293","296","299","302","305","308","311","314",
@@ -252,7 +253,8 @@ WATCH_POINTS = [
     ("Menganti", -7.28, 112.58), ("Benjeng", -7.25, 112.50),
     ("Driyorejo", -7.35, 112.62), ("Balongpanggang", -7.28, 112.42),
     ("Babat", -7.10, 112.18), ("Sugio", -7.13, 112.28),
-    ("Deket", -7.10, 112.45), ("Surabaya", -7.26, 112.75),
+    ("Deket", -7.10, 112.45), ("Mantup", -7.30, 112.34),
+    ("Surabaya", -7.26, 112.75),
     ("Mojokerto", -7.47, 112.43),
 ]
 
