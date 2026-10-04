@@ -161,6 +161,13 @@ const BMKG_ADM4 = {
   "Lamongan Kota":"35.24.22.1020", "Babat":"35.24.05.1003",
   "Sugio":"35.24.12.2007", "Deket":"35.24.25.2012", "Mantup":"35.24.16.2005"
 };
+const DESA_MANTUP = [
+  ["Kedukbembem","35.24.16.2005"],["Kedungsoko","35.24.16.2007"],["Mantup","35.24.16.2004"],
+  ["Mojosari","35.24.16.2012"],["Plabuhanrejo","35.24.16.2013"],["Rumpuk","35.24.16.2015"],
+  ["Sidomulyo","35.24.16.2011"],["Sukobendu","35.24.16.2001"],["Sukosari","35.24.16.2009"],
+  ["Sumberagung","35.24.16.2010"],["Sumberbendo","35.24.16.2003"],["Sumberdadi","35.24.16.2006"],
+  ["Sumberkerep","35.24.16.2014"],["Tugu","35.24.16.2008"],["Tunggunjagir","35.24.16.2002"]
+];
 const WMO_DESC = {0:"Cerah",1:"Cerah",2:"Berawan",3:"Mendung",45:"Kabut",48:"Kabut",51:"Gerimis",53:"Gerimis",55:"Gerimis lebat",61:"Hujan ringan",63:"Hujan sedang",65:"Hujan lebat",80:"Hujan ringan",81:"Hujan sedang",82:"Hujan lebat",95:"Badai petir",96:"Badai petir",99:"Badai petir"};
 const MODELS = [["ECMWF","ecmwf_ifs","🇪🇺"],["GFS","gfs_global","🇺🇸"],["ICON","icon_global","🇩🇪"]];
 const RAIN = new Set(["176","263","266","293","296","299","302","305","308","311","314","350","353","356","359","362","365","368","371","374","377","384","386","389"]);
@@ -425,6 +432,13 @@ async function load(){
   }
   h += "</div>";
 
+  // --- DESA MANTUP ---
+  h += '<div class="card"><h2>🏘️ Cek Per Desa — Kec. Mantup <small>prakiraan resmi BMKG per desa</small></h2>'
+    + '<select id="desaSel" style="width:100%;background:#0f1b30;color:var(--text);border:1px solid #334155;border-radius:10px;padding:10px;font-size:14px">'
+    + '<option value="">— Pilih desa —</option>'
+    + DESA_MANTUP.map(d=>'<option value="'+d[1]+'">'+d[0]+'</option>').join("") + '</select>'
+    + '<div id="desaHasil" style="margin-top:10px;font-size:13px;color:var(--muted)">Pilih desa untuk melihat prakiraan BMKG 3 hari.</div></div>';
+
   // --- ARENA MODEL ---
   const rainIcon = (tp, desc) => tp>=20 ? "⛈️" : tp>1 ? "🌧️" : /hujan|petir/i.test(desc||"") ? "🌧️" : /berawan|mendung/i.test(desc||"") ? "⛅" : "☀️";
   let arenaH = '<div class="card"><h2>🏟️ Arena Model <small>BMKG 🇮🇩 vs 4 model independen • mana yang beda?</small></h2>';
@@ -565,6 +579,19 @@ async function load(){
   h += "</div></div>";
 
   app.innerHTML = h;
+  const desaSel = document.getElementById("desaSel");
+  if (desaSel) desaSel.onchange = async () => {
+    const box = document.getElementById("desaHasil");
+    if (!desaSel.value) return;
+    box.innerHTML = "⏳ Memuat data BMKG…";
+    const b = await fetchBMKG(desaSel.value);
+    if (!b){ box.innerHTML = '<span class="err">Gagal memuat.</span>'; return; }
+    let t = '<table><tr><th>Hari</th><th>Cuaca</th><th>Hujan</th><th>Suhu max</th></tr>';
+    b.days.forEach(d => {
+      t += "<tr><td>"+esc(d.date.slice(5))+"</td><td>"+esc(d.desc)+"</td><td>"+d.tp+" mm</td><td>"+d.tmax+"°C</td></tr>";
+    });
+    box.innerHTML = "<b>🇮🇩 "+esc(b.desa)+", Kec. "+esc(b.kecamatan)+"</b> (BMKG)" + t + "</table>";
+  };
   document.getElementById("subhead").textContent = "Update: "+now+" • 6 sumber • "+Object.keys(W).length+" wttr, "+Object.keys(BMKG).filter(k=>BMKG[k]).length+" BMKG, arena 5-model";
 }
 
