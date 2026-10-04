@@ -118,6 +118,23 @@
   Auto-refresh tiap 30 menit
 </footer>
 
+<button id="chatFab" title="Tanya AI soal keamanan & gempa">💬</button>
+<div id="chatPanel">
+  <div id="chatHead">🤖 Tanya AI<small>Keamanan lokasimu • risiko gempa & megathrust • banjir</small></div>
+  <div id="chatKey" style="display:none">
+    Masukkan <b>Gemini API key</b> kamu (gratis) agar AI bisa menjawab.<br>
+    <input id="keyInput" type="password" placeholder="Tempel API key di sini">
+    <button class="btn" id="keySave" style="width:100%">Simpan key</button>
+    <div style="margin-top:8px;font-size:12px;color:var(--muted)">Belum punya? Buat gratis di <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Key tersimpan hanya di HP kamu.</div>
+  </div>
+  <div id="chatMsgs"></div>
+  <div class="chips" id="chatChips">
+    <span class="chip">Apakah Gresik aman dari gempa?</span>
+    <span class="chip">Apa itu megathrust?</span>
+    <span class="chip">Risiko banjir minggu ini?</span>
+  </div>
+  <form id="chatForm"><input id="chatInput" placeholder="Tanya soal keamanan daerahmu…" autocomplete="off"><button id="chatSend" type="submit">➤</button></form>
+</div>
 <script>
 /* ============ KONFIGURASI ============ */
 const STATIONS = {
@@ -635,22 +652,5 @@ async function aiSend(text){
 }
 form.onsubmit = e => { e.preventDefault(); const t = input.value.trim(); if (t) aiSend(t); };
 </script>
-<button id="chatFab" title="Tanya AI soal keamanan & gempa">💬</button>
-<div id="chatPanel">
-  <div id="chatHead">🤖 Tanya AI<small>Keamanan lokasimu • risiko gempa & megathrust • banjir</small></div>
-  <div id="chatKey" style="display:none">
-    Masukkan <b>Gemini API key</b> kamu (gratis) agar AI bisa menjawab.<br>
-    <input id="keyInput" type="password" placeholder="Tempel API key di sini">
-    <button class="btn" id="keySave" style="width:100%">Simpan key</button>
-    <div style="margin-top:8px;font-size:12px;color:var(--muted)">Belum punya? Buat gratis di <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Key tersimpan hanya di HP kamu.</div>
-  </div>
-  <div id="chatMsgs"></div>
-  <div class="chips" id="chatChips">
-    <span class="chip">Apakah Gresik aman dari gempa?</span>
-    <span class="chip">Apa itu megathrust?</span>
-    <span class="chip">Risiko banjir minggu ini?</span>
-  </div>
-  <form id="chatForm"><input id="chatInput" placeholder="Tanya soal keamanan daerahmu…" autocomplete="off"><button id="chatSend" type="submit">➤</button></form>
-</div>
 </body>
 </html>
