@@ -24,6 +24,9 @@
   }
   .btn:active{ transform:scale(.95); }
   .btn:disabled{ opacity:.5; }
+  .fold{ display:none !important; }
+  .foldbtn{ background:#0f1b30; border:1px solid #334155; color:var(--accent); border-radius:10px;
+    padding:8px 12px; margin:8px 0 2px; font-size:13px; width:100%; cursor:pointer; }
   .card{ background:var(--card); border:1px solid rgba(56,189,248,.15); border-radius:16px; padding:16px; margin-bottom:14px; }
   .card h2{ font-size:15px; margin-bottom:10px; color:var(--accent); }
   .card h2 small{ color:var(--muted); font-weight:400; font-size:11px; display:block; margin-top:2px; }
@@ -167,6 +170,12 @@ const DESA_MANTUP = [
   ["Sidomulyo","35.24.16.2011"],["Sukobendu","35.24.16.2001"],["Sukosari","35.24.16.2009"],
   ["Sumberagung","35.24.16.2010"],["Sumberbendo","35.24.16.2003"],["Sumberdadi","35.24.16.2006"],
   ["Sumberkerep","35.24.16.2014"],["Tugu","35.24.16.2008"],["Tunggunjagir","35.24.16.2002"]
+];
+const KEC_GRESIK = [
+  ["Balongpanggang","35.25.02.2001"],["Benjeng","35.25.04.2001"],["Cerme","35.25.11.2002"],
+  ["Driyorejo","35.25.15.2006"],["Dukun","35.25.01.2001"],["Kedamean","35.25.08.2002"],
+  ["Menganti","35.25.13.2013"],["Panceng","35.25.03.2001"],["Tambak","35.25.18.2002"],
+  ["Ujungpangkah","35.25.07.2002"],["Wringinanom","35.25.06.2001"]
 ];
 const WMO_DESC = {0:"Cerah",1:"Cerah",2:"Berawan",3:"Mendung",45:"Kabut",48:"Kabut",51:"Gerimis",53:"Gerimis",55:"Gerimis lebat",61:"Hujan ringan",63:"Hujan sedang",65:"Hujan lebat",80:"Hujan ringan",81:"Hujan sedang",82:"Hujan lebat",95:"Badai petir",96:"Badai petir",99:"Badai petir"};
 const MODELS = [["ECMWF","ecmwf_ifs","🇪🇺"],["GFS","gfs_global","🇺🇸"],["ICON","icon_global","🇩🇪"]];
@@ -353,6 +362,12 @@ function validate(name, wdays, daily){
 }
 
 /* ============ RENDER ============ */
+function toggleFold(id, btn){
+  const el = document.getElementById(id);
+  const hidden = el.classList.toggle("fold");
+  if (!btn.dataset.t) btn.dataset.t = btn.textContent;
+  btn.textContent = hidden ? btn.dataset.t : "▲ Tutup";
+}
 async function load(){
   const btn = document.getElementById("refreshBtn");
   btn.disabled = true; btn.textContent = "⏳ Memuat…";
@@ -425,9 +440,17 @@ async function load(){
     h += '<div class="alert sev-green">✅ Tidak ada peringatan — semua parameter dalam batas normal.</div>';
   else {
     reds.slice(0,8).forEach(a=>{ h+='<div class="alert sev-red">'+a.icon+" "+a.text+"</div>"; });
-    if (reds.length>8) h+='<div class="alert sev-red">…dan '+(reds.length-8)+' peringatan siaga lainnya.</div>';
+    if (reds.length>8){
+      h+='<div id="foldRed" class="fold">';
+      reds.slice(8).forEach(a=>{ h+='<div class="alert sev-red">'+a.icon+" "+a.text+"</div>"; });
+      h+='</div><button class="foldbtn" onclick="toggleFold(\'foldRed\',this)">▼ Tampilkan '+(reds.length-8)+' peringatan siaga lainnya</button>';
+    }
     yels.slice(0,6).forEach(a=>{ h+='<div class="alert sev-yellow">'+a.icon+" "+a.text+"</div>"; });
-    if (yels.length>6) h+='<div class="alert sev-yellow">…dan '+(yels.length-6)+' peringatan waspada lainnya.</div>';
+    if (yels.length>6){
+      h+='<div id="foldYel" class="fold">';
+      yels.slice(6).forEach(a=>{ h+='<div class="alert sev-yellow">'+a.icon+" "+a.text+"</div>"; });
+      h+='</div><button class="foldbtn" onclick="toggleFold(\'foldYel\',this)">▼ Tampilkan '+(yels.length-6)+' peringatan waspada lainnya</button>';
+    }
   }
   h += "</div>";
 
@@ -437,6 +460,12 @@ async function load(){
     + '<option value="">— Pilih desa —</option>'
     + DESA_MANTUP.map(d=>'<option value="'+d[1]+'">'+d[0]+'</option>').join("") + '</select>'
     + '<div id="desaHasil" style="margin-top:10px;font-size:13px;color:var(--muted)">Pilih desa untuk melihat prakiraan BMKG 3 hari.</div></div>';
+  // --- KECAMATAN GRESIK ---
+  h += '<div class="card"><h2>🏘️ Cek Per Kecamatan — Kab. Gresik <small>prakiraan resmi BMKG per kecamatan</small></h2>'
+    + '<select id="kecSel" style="width:100%;background:#0f1b30;color:var(--text);border:1px solid #334155;border-radius:10px;padding:10px;font-size:14px">'
+    + '<option value="">— Pilih kecamatan —</option>'
+    + KEC_GRESIK.map(d=>'<option value="'+d[1]+'">'+d[0]+'</option>').join("") + '</select>'
+    + '<div id="kecHasil" style="margin-top:10px;font-size:13px;color:var(--muted)">Pilih kecamatan untuk melihat prakiraan BMKG 3 hari.</div></div>';
 
   // --- ARENA MODEL ---
   const rainIcon = (tp, desc) => tp>=20 ? "⛈️" : tp>1 ? "🌧️" : /hujan|petir/i.test(desc||"") ? "🌧️" : /berawan|mendung/i.test(desc||"") ? "⛅" : "☀️";
@@ -544,15 +573,23 @@ async function load(){
   // --- KEKERINGAN ---
   h += '<div class="card"><h2>🏜️ Pantau Kekeringan <small>curah hujan 14 hari (7 lalu + 7 prakiraan) × suhu</small></h2>'
     + '<table><tr><th>Titik</th><th>7 hari lalu</th><th>7 hari depan</th><th>Total 14 hari</th><th>Suhu max rata²</th><th>Status</th></tr>';
+  const krows = [];
   omNames.forEach(n=>{
     const st = omStats[n]; if(!st) return;
     const stat = st.total14<5&&st.avgMax>33?'<span class="badge b-red">SIAGA</span>'
       : st.total14<12&&st.avgMax>32?'<span class="badge b-yellow">WASPADA</span>'
       : '<span class="badge b-green">NORMAL</span>';
-    h += "<tr><td>"+esc(n)+"</td><td>"+st.past.toFixed(1)+" mm</td><td>"+st.fut.toFixed(1)+" mm</td>"
-      + "<td>"+st.total14.toFixed(1)+" mm</td><td>"+st.avgMax.toFixed(1)+"°C</td><td>"+stat+"</td></tr>";
+    krows.push("<tr><td>"+esc(n)+"</td><td>"+st.past.toFixed(1)+" mm</td><td>"+st.fut.toFixed(1)+" mm</td>"
+      + "<td>"+st.total14.toFixed(1)+" mm</td><td>"+st.avgMax.toFixed(1)+"°C</td><td>"+stat+"</td></tr>");
   });
-  h += "</table></div>";
+  h += krows.slice(0,5).join("");
+  h += "</table>";
+  if (krows.length>5){
+    h += '<div id="foldK" class="fold"><table><tr><th>Titik</th><th>7 hari lalu</th><th>7 hari depan</th><th>Total 14 hari</th><th>Suhu max rata²</th><th>Status</th></tr>'
+      + krows.slice(5).join("") + '</table></div>'
+      + '<button class="foldbtn" onclick="toggleFold(\'foldK\',this)">▼ Tampilkan '+(krows.length-5)+' titik lainnya</button>';
+  }
+  h += "</div>";
 
   // --- GEMPA ---
   h += '<div class="card"><h2>🌏 Gempa Terkini (7 hari, M≥4.5) <span class="src-tag">USGS</span></h2>';
@@ -560,37 +597,58 @@ async function load(){
   else if (!quakes.length) h += '<div class="alert sev-green">✅ Tidak ada gempa M≥4.5 di kawasan Asia Tenggara 7 hari terakhir.</div>';
   else {
     h += '<table><tr><th>Waktu (WIB)</th><th>Magnitudo</th><th>Lokasi</th><th>Kedalaman</th></tr>';
-    quakes.slice(0,10).forEach(q=>{
+    const qrow = q=>{
       const t = q.time.toLocaleString("id-ID",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
       const m = q.mag>=6 ? '<b style="color:var(--red)">M'+q.mag.toFixed(1)+"</b>" : "M"+q.mag.toFixed(1);
-      h += "<tr><td>"+t+"</td><td>"+m+"</td><td>"+esc(q.place)+"</td><td>"+q.depth+" km</td></tr>";
-    });
+      return "<tr><td>"+t+"</td><td>"+m+"</td><td>"+esc(q.place)+"</td><td>"+q.depth+" km</td></tr>";
+    };
+    quakes.slice(0,5).forEach(q=>{ h += qrow(q); });
     h += "</table>";
+    if (quakes.length>5){
+      h += '<div id="foldQ" class="fold"><table><tr><th>Waktu (WIB)</th><th>Magnitudo</th><th>Lokasi</th><th>Kedalaman</th></tr>';
+      quakes.slice(5).forEach(q=>{ h += qrow(q); });
+      h += '</table></div><button class="foldbtn" onclick="toggleFold(\'foldQ\',this)">▼ Tampilkan '+(quakes.length-5)+' gempa lainnya</button>';
+    }
   }
   h += "</div>";
 
   // --- STASIUN REGIONAL ---
   h += '<div class="card"><h2>🌏 Stasiun Korelasi Regional</h2><div class="stations">';
-  for (const [k,why] of Object.entries(STATIONS)){
-    const v = W[k];
+  const stKeys = Object.keys(STATIONS);
+  stKeys.slice(0,6).forEach(k=>{
+    const v = W[k], why = STATIONS[k];
     h += '<div class="st">'+(v&&v.days.length?icon(v.days[0]):"❓")+" "+esc(k)+"<small>"+esc(why)+"</small></div>";
+  });
+  h += "</div>";
+  if (stKeys.length>6){
+    h += '<div id="foldS" class="fold"><div class="stations">';
+    stKeys.slice(6).forEach(k=>{
+      const v = W[k], why = STATIONS[k];
+      h += '<div class="st">'+(v&&v.days.length?icon(v.days[0]):"❓")+" "+esc(k)+"<small>"+esc(why)+"</small></div>";
+    });
+    h += '</div></div><button class="foldbtn" onclick="toggleFold(\'foldS\',this)">▼ Tampilkan '+(stKeys.length-6)+' stasiun lainnya</button>';
   }
-  h += "</div></div>";
+  h += "</div>";
 
   app.innerHTML = h;
-  const desaSel = document.getElementById("desaSel");
-  if (desaSel) desaSel.onchange = async () => {
-    const box = document.getElementById("desaHasil");
-    if (!desaSel.value) return;
-    box.innerHTML = "⏳ Memuat data BMKG…";
-    const b = await fetchBMKG(desaSel.value);
-    if (!b){ box.innerHTML = '<span class="err">Gagal memuat.</span>'; return; }
-    let t = '<table><tr><th>Hari</th><th>Cuaca</th><th>Hujan</th><th>Suhu max</th></tr>';
-    b.days.forEach(d => {
-      t += "<tr><td>"+esc(d.date.slice(5))+"</td><td>"+esc(d.desc)+"</td><td>"+d.tp+" mm</td><td>"+d.tmax+"°C</td></tr>";
-    });
-    box.innerHTML = "<b>🇮🇩 "+esc(b.desa)+", Kec. "+esc(b.kecamatan)+"</b> (BMKG)" + t + "</table>";
+  const setupPicker = (selId, boxId) => {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    sel.onchange = async () => {
+      const box = document.getElementById(boxId);
+      if (!sel.value) return;
+      box.innerHTML = "⏳ Memuat data BMKG…";
+      const b = await fetchBMKG(sel.value);
+      if (!b){ box.innerHTML = '<span class="err">Gagal memuat.</span>'; return; }
+      let t = '<table><tr><th>Hari</th><th>Cuaca</th><th>Hujan</th><th>Suhu max</th></tr>';
+      b.days.forEach(d => {
+        t += "<tr><td>"+esc(d.date.slice(5))+"</td><td>"+esc(d.desc)+"</td><td>"+d.tp+" mm</td><td>"+d.tmax+"°C</td></tr>";
+      });
+      box.innerHTML = "<b>🇮🇩 "+esc(b.desa)+", Kec. "+esc(b.kecamatan)+"</b> (BMKG)" + t + "</table>";
+    };
   };
+  setupPicker("desaSel", "desaHasil");
+  setupPicker("kecSel", "kecHasil");
   document.getElementById("subhead").textContent = "Update: "+now+" • 6 sumber • "+Object.keys(W).length+" wttr, "+Object.keys(BMKG).filter(k=>BMKG[k]).length+" BMKG, arena 5-model";
 }
 
