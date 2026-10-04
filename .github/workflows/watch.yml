@@ -1,0 +1,32 @@
+name: Extreme Watch (notifikasi langsung)
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check extreme events
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
+        run: python weather_bot.py --watch
+
+      - name: Save alert state
+        run: |
+          git config user.name "weather-bot"
+          git config user.email "weather-bot@local"
+          git add .alert_state.json
+          git diff --quiet --cached || git push
