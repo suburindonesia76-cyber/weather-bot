@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cuaca Gresik & Lamongan — Live</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  :root{
+    --bg:#0f172a; --bg2:#1e293b; --card:#1e293b; --accent:#38bdf8; --accent2:#818cf8;
+    --text:#f1f5f9; --muted:#94a3b8; --green:#4ade80; --yellow:#facc15; --red:#f87171;
+  }
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:linear-gradient(180deg,#0b1226 0%,var(--bg) 40%);
+    color:var(--text); min-height:100vh; padding:16px; max-width:900px; margin:0 auto;
+  }
+  header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px; }
+  header h1{ font-size:20px; }
+  header p{ font-size:12px; color:var(--muted); }
+  .btn{
+    background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#04121f; border:none;
+    padding:9px 16px; border-radius:12px; font-weight:700; font-size:14px; cursor:pointer;
+  }
+  .btn:active{ transform:scale(.95); }
+  .btn:disabled{ opacity:.5; }
+  .card{
+    background:var(--card); border:1px solid rgba(56,189,248,.15); border-radius:16px;
+    padding:16px; margin-bottom:14px;
+  }
+  .card h2{ font-size:15px; margin-bottom:10px; color:var(--accent); }
+  .score-wrap{ display:flex; align-items:center; gap:16px; }
+  .score-ring{
+    width:92px; height:92px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    background:conic-gradient(var(--sc,#4ade80) calc(var(--p,0)*1%), #334155 0);
+  }
+  .score-ring b{ font-size:24px; }
+  .score-ring span{ font-size:10px; color:var(--muted); }
+  .score-inner{
+    width:74px; height:74px; border-radius:50%; background:var(--card);
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+  }
+  .notes{ font-size:13px; line-height:1.7; }
+  .notes div{ margin-bottom:4px; }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:10px; }
+  .loc{
+    background:#0f1b30; border:1px solid rgba(56,189,248,.12); border-radius:12px; padding:12px;
+  }
+  .loc h3{ font-size:13px; margin-bottom:2px; }
+  .loc .kab{ font-size:11px; color:var(--muted); margin-bottom:8px; }
+  .loc .big{ font-size:26px; font-weight:700; }
+  .loc .desc{ font-size:12px; color:var(--muted); margin:4px 0; }
+  .loc .meta{ font-size:11px; color:var(--muted); line-height:1.6; }
+  .loc .risk{ font-size:11px; color:#fbbf24; margin-top:6px; line-height:1.5; }
+  table{ width:100%; border-collapse:collapse; font-size:12px; }
+  th,td{ padding:8px 6px; text-align:left; border-bottom:1px solid #334155; }
+  th{ color:var(--muted); font-weight:600; }
+  .stations{ display:flex; flex-wrap:wrap; gap:8px; }
+  .st{
+    background:#0f1b30; border:1px solid rgba(56,189,248,.12); border-radius:10px;
+    padding:8px 10px; font-size:12px;
+  }
+  .st small{ color:var(--muted); display:block; font-size:10px; }
+  .loading{ text-align:center; padding:40px; color:var(--muted); }
+  .err{ color:var(--red); font-size:13px; }
+  footer{ text-align:center; font-size:11px; color:var(--muted); margin:20px 0 10px; line-height:1.6; }
+  .verdict{ font-size:14px; font-weight:700; padding:6px 12px; border-radius:10px; display:inline-block; margin-top:8px; }
+  .v-green{ background:rgba(74,222,128,.15); color:var(--green); }
+  .v-yellow{ background:rgba(250,204,21,.15); color:var(--yellow); }
+  .v-red{ background:rgba(248,113,113,.15); color:var(--red); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🌦️ Cuaca Gresik & Lamongan</h1>
+    <p id="subhead">Memuat data live…</p>
+  </div>
+  <button class="btn" id="refreshBtn">↻ Refresh</button>
+</header>
+
+<div id="app"><div class="loading">⏳ Mengambil data live dari 21 titik…</div></div>
+
+<footer>
+  Sumber: wttr.in (live) • Korelasi regional: ITCZ, trough Indochina, konveksi Pasifik, front Australia, hulu Kali Lamong<br>
+  Auto-refresh tiap 30 menit • Data untuk kewaspadaan, bukan peringatan resmi BMKG
+</footer>
+
+<script>
+const STATIONS = {
+  "Bangkok": "trough Indochina", "Singapura": "ITCZ ekuator", "Kota Kinabalu": "uap air timur",
+  "Manila": "seed siklon Pasifik", "Darwin": "monsun selatan", "Perth": "front Australia",
+  "Medan": "gelombang tropis", "Jakarta": "barat Jawa", "Surabaya": "patokan Jatim",
+  "Kediri": "hulu jauh Lamong", "Mojokerto": "hulu Lamong"
+};
+const FOKUS = [
+  ["Menganti","Gresik","riwayat banjir Kali Lamong"],
+  ["Benjeng","Gresik","riwayat luapan Kali Lamong"],
+  ["Driyorejo","Gresik","riwayat banjir Kali Surabaya"],
+  ["Balongpanggang","Gresik","banjir kiriman hulu"],
+  ["Lamongan Kota","Lamongan","dekat muara Kali Lamong"],
+  ["Babat","Lamongan","hulu, kiriman Mojokerto"],
+  ["Sugio","Lamongan","pernah peringatan BMKG"],
+  ["Deket","Lamongan","koridor Gresik-Lamongan"]
+];
+const RAIN = new Set(["176","263","266","293","296","299","302","305","308","311","314","350","353","356","359","362","365","368","371","374","377","384","386","389"]);
+const HEAVY = new Set(["299","302","305","308","311","314","356","359","365","384","386","389"]);
+
+const fnum = x => { const n = parseFloat(x); return isNaN(n) ? 0 : n; };
+const isRain = d => RAIN.has(String(d.code)) || d.rain_mm > 0.5;
+const isHeavy = d => HEAVY.has(String(d.code)) || d.rain_mm >= 10;
+const icon = d => isHeavy(d) ? "⛈️" : isRain(d) ? "🌧️" : "☀️";
+
+async function fetchLoc(loc){
+  try {
+    const r = await fetch("https://wttr.in/" + encodeURIComponent(loc) + ",Indonesia?format=j1");
+    if (!r.ok) throw 0;
+    const j = await r.json();
+    const cc = (j.current_condition || [{}])[0];
+    const days = (j.weather || []).slice(0,3).map(d => {
+      const hourly = d.hourly || [];
+      const rain = hourly.reduce((s,h) => s + fnum(h.precipMM), 0);
+      let mx = {time:"0",precipMM:0}, mid = {weatherCode:"113",weatherDesc:[{value:"N/A"}]};
+      if (hourly.length){
+        mx = hourly.reduce((a,b) => fnum(b.precipMM) > fnum(a.precipMM) ? b : a);
+        mid = hourly[Math.min(6, hourly.length-1)];
+      }
+      const wd = (mid.weatherDesc || [{value:"N/A"}])[0];
+      return {
+        date: d.date || "?", max: d.maxtempC || "?", min: d.mintempC || "?",
+        rain_mm: Math.round(rain*10)/10, code: mid.weatherCode || "113",
+        desc: (wd.value || "N/A").trim(),
+        peak_hour: String(mx.time || "0").padStart(4,"0").slice(0,2) + ":00",
+        peak_mm: fnum(mx.precipMM)
+      };
+    });
+    const cd = (cc.weatherDesc || [{value:"N/A"}])[0];
+    return { now:(cd.value||"N/A").trim(), temp:cc.temp_C||"?", feels:cc.FeelsLikeC||"?",
+             hum:cc.humidity||"?", wind:cc.windspeedKmph||"?", days };
+  } catch(e){ return null; }
+}
+
+function correlate(data){
+  const notes = []; let score = 0;
+  const rainy = k => { const v=data[k]; return v && v.days.length && isRain(v.days[0]); };
+  const heavy = k => { const v=data[k]; return v && v.days.length && isHeavy(v.days[0]); };
+  const eq = ["Singapura","Kota Kinabalu"].filter(rainy);
+  if (eq.length){ score+=20; notes.push("🌧️ ITCZ ekuator aktif ("+eq.join(", ")+") — uap timur bisa mencapai Jatim."); }
+  else notes.push("☀️ ITCZ ekuator lemah.");
+  if (rainy("Manila")){ score+=15; notes.push("🌀 Konveksi Pasifik barat aktif (Manila) — awasi sistem tropis."); }
+  if (rainy("Bangkok")){ score+=10; notes.push("⛈️ Trough Indochina aktif (Bangkok)."); }
+  if (rainy("Darwin")||rainy("Perth")){ score+=15; notes.push("🌊 Aktivitas selatan (Darwin/Perth)."); }
+  if (rainy("Medan")||rainy("Jakarta")){ score+=10; notes.push("🌫️ Pola barat aktif (Medan/Jakarta)."); }
+  const hh = ["Mojokerto","Kediri"].filter(heavy), hu = ["Mojokerto","Kediri"].filter(rainy);
+  if (hh.length){ score+=25; notes.push("🚨 HULU LAMONG HUJAN LEBAT ("+hh.join(", ")+") — risiko banjir kiriman 24–48 jam!"); }
+  else if (hu.length){ score+=15; notes.push("⚠️ Hulu Kali Lamong hujan ("+hu.join(", ")+") — pantau TMA."); }
+  else notes.push("✅ Hulu Kali Lamong kering.");
+  const fh = ["Gresik","Lamongan"].filter(heavy), fr = ["Gresik","Lamongan"].filter(rainy);
+  if (fh.length){ score+=25; notes.push("🚨 Fokus area hujan lebat ("+fh.join(", ")+")."); }
+  else if (fr.length){ score+=15; notes.push("🌧️ Fokus area sedang hujan ("+fr.join(", ")+")."); }
+  else notes.push("☀️ Fokus area kering saat ini.");
+  if (rainy("Surabaya")){ score+=5; notes.push("🌥️ Surabaya hujan — penanda lokal lembap."); }
+  score = Math.min(score, 100);
+  if (!fh.length) score = Math.min(score, 60);
+  return {notes, score};
+}
+
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+
+async function load(){
+  const btn = document.getElementById("refreshBtn");
+  btn.disabled = true; btn.textContent = "⏳ Memuat…";
+  const targets = [...Object.keys(STATIONS), "Gresik", "Lamongan", ...FOKUS.map(f=>f[0])]
+    .filter((v,i,a) => a.indexOf(v)===i);
+  const results = await Promise.all(targets.map(fetchLoc));
+  const data = {};
+  targets.forEach((t,i) => { if (results[i]) data[t] = results[i]; });
+  btn.disabled = false; btn.textContent = "↻ Refresh";
+
+  const app = document.getElementById("app");
+  const fails = targets.filter(t => !data[t]);
+  if (!data["Gresik"] || !data["Lamongan"]){
+    app.innerHTML = '<div class="card err">❌ Gagal mengambil data Gresik/Lamongan. Cek koneksi lalu refresh.</div>';
+    return;
+  }
+  const {notes, score} = correlate(data);
+  const color = score >= 70 ? "#f87171" : score >= 25 ? "#facc15" : "#4ade80";
+  const verdict = score >= 70 ? ["🔴 SIAGA","v-red"] : score >= 25 ? ["🟡 WASPADA","v-yellow"] : ["🟢 AMAN","v-green"];
+  const now = new Date().toLocaleString("id-ID",{day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"});
+
+  let h = '<div class="card"><h2>📊 Skor Korelasi Regional</h2><div class="score-wrap">'
+    + '<div class="score-ring" style="--p:'+score+";--sc:"+color+'"><div class="score-inner"><b>'+score+'</b><span>/100</span></div></div>'
+    + '<div class="notes">' + notes.map(n=>"<div>"+esc(n)+"</div>").join("") + '<span class="verdict '+verdict[1]+'">'+verdict[0]+"</span></div>"
+    + "</div></div>";
+
+  h += '<div class="card"><h2>🎯 Titik Gresik & Lamongan (Live)</h2><div class="grid">';
+  for (const [name,kab,risk] of FOKUS){
+    const v = data[name];
+    if (!v){ h += '<div class="loc"><h3>'+esc(name)+'</h3><div class="kab">'+esc(kab)+'</div><div class="err">data gagal</div></div>'; continue; }
+    const d = v.days[0] || {};
+    h += '<div class="loc"><h3>'+icon(d)+' '+esc(name)+'</h3><div class="kab">'+esc(kab)+'</div>'
+      + '<div class="big">'+esc(v.temp)+'°C</div><div class="desc">'+esc(v.now)+'</div>'
+      + '<div class="meta">Terasa '+esc(v.feels)+'° • Lembap '+esc(v.hum)+'%<br>Angin '+esc(v.wind)+' km/j<br>'
+      + 'Hujan hari ini: '+esc(d.rain_mm ?? "?")+' mm</div>'
+      + '<div class="risk">⚠️ '+esc(risk)+'</div></div>';
+  }
+  h += "</div></div>";
+
+  h += '<div class="card"><h2>📅 Prakiraan 3 Hari</h2><table><tr><th>Tanggal</th><th>Gresik</th><th>Lamongan</th><th>Kesimpulan</th></tr>';
+  for (let i=0;i<3;i++){
+    const g = (data["Gresik"].days||[])[i], l = (data["Lamongan"].days||[])[i];
+    const gs = g ? icon(g)+" "+esc(g.desc)+" "+esc(g.min)+"–"+esc(g.max)+"°C "+esc(g.rain_mm)+"mm" : "—";
+    const ls = l ? icon(l)+" "+esc(l.desc)+" "+esc(l.min)+"–"+esc(l.max)+"°C "+esc(l.rain_mm)+"mm" : "—";
+    const interp = (g&&isHeavy(g))||(l&&isHeavy(l)) ? "⛈️ siaga" : (g&&isRain(g))||(l&&isRain(l)) ? "⛅ potensi hujan" : "☀️ kering";
+    const dt = g ? g.date : "?";
+    h += "<tr><td>"+esc(dt)+"</td><td>"+gs+"</td><td>"+ls+"</td><td>"+interp+"</td></tr>";
+  }
+  h += "</table></div>";
+
+  h += '<div class="card"><h2>🌏 Stasiun Korelasi Regional</h2><div class="stations">';
+  for (const [k,why] of Object.entries(STATIONS)){
+    const v = data[k];
+    h += '<div class="st">'+(v&&v.days.length?icon(v.days[0]):"❓")+" "+esc(k)+"<small>"+esc(why)+"</small></div>";
+  }
+  h += "</div></div>";
+
+  if (fails.length) h += '<div class="card"><div class="err">⚠️ Gagal memuat: '+fails.map(esc).join(", ")+'</div></div>';
+
+  app.innerHTML = h;
+  document.getElementById("subhead").textContent = "Update: " + now + " • " + Object.keys(data).length + "/" + targets.length + " titik live";
+}
+
+document.getElementById("refreshBtn").onclick = load;
+load();
+setInterval(load, 30*60*1000);
+</script>
+</body>
+</html>
