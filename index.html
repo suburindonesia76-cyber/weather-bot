@@ -109,7 +109,7 @@
   <button class="btn" id="refreshBtn">↻ Refresh</button>
 </header>
 
-<div id="app"><div class="loading">⏳ Mengambil data dari 3 sumber (wttr.in • Open-Meteo • USGS)…</div></div>
+<div id="app"><div class="loading">⏳ Mengambil data dari 6 sumber (BMKG • ECMWF • GFS • ICON • wttr.in • USGS)…</div></div>
 
 <footer>
   Sumber: <b>BMKG</b> (resmi 🇮🇩) × <b>ECMWF</b> × <b>GFS</b> × <b>ICON</b> × <b>wttr.in</b> × <b>USGS</b> (gempa).<br>
@@ -177,6 +177,12 @@ const WMO_STORM = new Set([95,96,99]);
 
 const fnum = x => { const n = parseFloat(x); return isNaN(n) ? 0 : n; };
 const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+async function fetchT(url, ms, opts){
+  const c = new AbortController();
+  const t = setTimeout(()=>c.abort(), ms||25000);
+  try{ return await fetch(url, Object.assign({}, opts||{}, {signal:c.signal})); }
+  finally{ clearTimeout(t); }
+}
 const isRain = d => RAIN.has(String(d.code)) || d.rain_mm > 0.5;
 const isHeavy = d => HEAVY.has(String(d.code)) || d.rain_mm >= 10;
 const icon = d => isHeavy(d) ? "⛈️" : isRain(d) ? "🌧️" : "☀️";
@@ -184,7 +190,7 @@ const icon = d => isHeavy(d) ? "⛈️" : isRain(d) ? "🌧️" : "☀️";
 /* ============ SUMBER 1: wttr.in ============ */
 async function fetchWttr(loc){
   try {
-    const r = await fetch("https://wttr.in/" + encodeURIComponent(loc) + ",Indonesia?format=j1");
+    const r = await fetchT("https://wttr.in/" + encodeURIComponent(loc) + ",Indonesia?format=j1", 25000);
     if (!r.ok) throw 0;
     const j = await r.json();
     const cc = (j.current_condition || [{}])[0];
@@ -214,7 +220,7 @@ async function fetchOM(lat, lon){
     const u = "https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon
       + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_gusts_10m_max,cape_max,et0_fao_evapotranspiration"
       + "&timezone=Asia%2FJakarta&forecast_days=7&past_days=7";
-    const r = await fetch(u);
+    const r = await fetchT(u, 25000);
     if (!r.ok) throw 0;
     return (await r.json()).daily || null;
   } catch(e){ return null; }
@@ -226,7 +232,7 @@ async function fetchQuakes(){
     const d = new Date(Date.now()-7*864e5).toISOString().slice(0,10);
     const u = "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime="+d
       + "&minmagnitude=4.5&minlatitude=-11&maxlatitude=12&minlongitude=90&maxlongitude=146&orderby=time&limit=15";
-    const r = await fetch(u);
+    const r = await fetchT(u, 25000);
     if (!r.ok) throw 0;
     const j = await r.json();
     return (j.features||[]).map(f => ({
@@ -238,7 +244,7 @@ async function fetchQuakes(){
 
 async function fetchBMKG(adm4){
   try{
-    const r = await fetch("https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4="+adm4);
+    const r = await fetchT("https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4="+adm4, 20000);
     if (!r.ok) throw 0;
     const d0 = (await r.json()).data[0];
     const days = d0.cuaca.map(slots => {
@@ -261,7 +267,7 @@ async function fetchOMModel(lat, lon, model){
   try{
     const u = "https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon
       + "&daily=precipitation_sum,weathercode&timezone=Asia%2FJakarta&forecast_days=3&models="+model;
-    const r = await fetch(u);
+    const r = await fetchT(u, 25000);
     if (!r.ok) throw 0;
     return (await r.json()).daily || null;
   }catch(e){ return null; }
@@ -670,7 +676,7 @@ async function aiSend(text){
       contents: aiHist.concat([{ role:"user", parts:[{text}] }]).slice(-12),
       generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
     };
-    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key="+key,
+    const r = await fetchT("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key="+key, 60000,
       { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) });
     const j = await r.json();
     if (j.error) throw new Error(j.error.message || "API error");
