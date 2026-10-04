@@ -636,7 +636,7 @@ async function aiSend(text){
       contents: aiHist.concat([{ role:"user", parts:[{text}] }]).slice(-12),
       generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
     };
-    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key="+key,
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key="+key,
       { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) });
     const j = await r.json();
     if (j.error) throw new Error(j.error.message || "API error");
@@ -646,7 +646,9 @@ async function aiSend(text){
     aiHist.push({ role:"user", parts:[{text}] }, { role:"model", parts:[{text:ans}] });
   }catch(e){
     typing.remove();
-    aiSay("⚠️ Gagal menghubungi AI: "+esc(e.message||e)+"<br>Cek API key kamu.");
+    const em = esc(e.message||e);
+    const hint = /API key|API_KEY|401|403|PERMISSION/i.test(e.message||"") ? "<br>Cek API key kamu di aistudio.google.com/apikey." : "";
+    aiSay("⚠️ Gagal menghubungi AI: "+em+hint);
   }
   aiBusy = false;
 }
