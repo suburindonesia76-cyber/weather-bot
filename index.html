@@ -27,8 +27,8 @@
   .fold{ display:none !important; }
   .foldbtn{ background:#0f1b30; border:1px solid #334155; color:var(--accent); border-radius:10px;
     padding:8px 12px; margin:8px 0 2px; font-size:13px; width:100%; cursor:pointer; }
-  .card{ background:var(--card); border:1px solid rgba(56,189,248,.15); border-radius:16px; padding:16px; margin-bottom:14px; }
-  .card h2{ font-size:15px; margin-bottom:10px; color:var(--accent); }
+  .card{ background:var(--card); border:1px solid rgba(56,189,248,.15); border-radius:14px; padding:12px; margin-bottom:10px; }
+  .card h2{ font-size:15px; margin-bottom:8px; color:var(--accent); }
   .card h2 small{ color:var(--muted); font-weight:400; font-size:11px; display:block; margin-top:2px; }
   .alert{ border-radius:12px; padding:10px 12px; margin-bottom:8px; font-size:13px; line-height:1.5; }
   .sev-red{ background:rgba(248,113,113,.13); border:1px solid rgba(248,113,113,.4); }
@@ -454,18 +454,20 @@ async function load(){
   }
   h += "</div>";
 
-  // --- DESA MANTUP ---
-  h += '<div class="card"><h2>🏘️ Cek Per Desa — Kec. Mantup <small>prakiraan resmi BMKG per desa</small></h2>'
-    + '<select id="desaSel" style="width:100%;background:#0f1b30;color:var(--text);border:1px solid #334155;border-radius:10px;padding:10px;font-size:14px">'
-    + '<option value="">— Pilih desa —</option>'
-    + DESA_MANTUP.map(d=>'<option value="'+d[1]+'">'+d[0]+'</option>').join("") + '</select>'
-    + '<div id="desaHasil" style="margin-top:10px;font-size:13px;color:var(--muted)">Pilih desa untuk melihat prakiraan BMKG 3 hari.</div></div>';
-  // --- KECAMATAN GRESIK ---
-  h += '<div class="card"><h2>🏘️ Cek Per Kecamatan — Kab. Gresik <small>prakiraan resmi BMKG per kecamatan</small></h2>'
-    + '<select id="kecSel" style="width:100%;background:#0f1b30;color:var(--text);border:1px solid #334155;border-radius:10px;padding:10px;font-size:14px">'
-    + '<option value="">— Pilih kecamatan —</option>'
-    + KEC_GRESIK.map(d=>'<option value="'+d[1]+'">'+d[0]+'</option>').join("") + '</select>'
-    + '<div id="kecHasil" style="margin-top:10px;font-size:13px;color:var(--muted)">Pilih kecamatan untuk melihat prakiraan BMKG 3 hari.</div></div>';
+  // --- PICKER WILAYAH: pilih kabupaten, lalu wilayah ---
+  const WILAYAH = {
+    "Gresik": [["Kecamatan", KEC_GRESIK.map(d=>["Kec. "+d[0], d[1]])]],
+    "Lamongan": [
+      ["Kecamatan", [["Kec. Babat","35.24.05.1003"],["Kec. Deket","35.24.25.2012"],["Kec. Lamongan","35.24.22.1020"],["Kec. Sugio","35.24.12.2007"]]],
+      ["Kec. Mantup — Per Desa", DESA_MANTUP.map(d=>["Ds. "+d[0], d[1]])]
+    ]
+  };
+  const selStyle = 'width:100%;background:#0f1b30;color:var(--text);border:1px solid #334155;border-radius:10px;padding:10px;font-size:14px';
+  h += '<div class="card"><h2>📍 Cek Wilayah <small>prakiraan resmi BMKG — pilih kabupaten, lalu wilayah</small></h2>'
+    + '<select id="kabSel" style="'+selStyle+'">'
+    + '<option value="">— Pilih kabupaten —</option><option value="Gresik">Gresik</option><option value="Lamongan">Lamongan</option></select>'
+    + '<select id="wilSel" style="'+selStyle+';margin-top:8px"><option value="">— Pilih wilayah —</option></select>'
+    + '<div id="wilHasil" style="margin-top:10px;font-size:13px;color:var(--muted)">Pilih kabupaten dan wilayah untuk melihat prakiraan BMKG 3 hari.</div></div>';
 
   // --- ARENA MODEL ---
   const rainIcon = (tp, desc) => tp>=20 ? "⛈️" : tp>1 ? "🌧️" : /hujan|petir/i.test(desc||"") ? "🌧️" : /berawan|mendung/i.test(desc||"") ? "⛅" : "☀️";
@@ -631,14 +633,20 @@ async function load(){
   h += "</div>";
 
   app.innerHTML = h;
-  const setupPicker = (selId, boxId) => {
-    const sel = document.getElementById(selId);
-    if (!sel) return;
-    sel.onchange = async () => {
-      const box = document.getElementById(boxId);
-      if (!sel.value) return;
+  const kabSel = document.getElementById("kabSel"), wilSel = document.getElementById("wilSel");
+  if (kabSel){
+    kabSel.onchange = () => {
+      const groups = WILAYAH[kabSel.value] || [];
+      wilSel.innerHTML = '<option value="">— Pilih wilayah —</option>' + groups.map(([g, items]) =>
+        '<optgroup label="'+esc(g)+'">' + items.map(d=>'<option value="'+d[1]+'">'+esc(d[0])+'</option>').join("") + '</optgroup>'
+      ).join("");
+      document.getElementById("wilHasil").innerHTML = "Pilih wilayah untuk melihat prakiraan BMKG 3 hari.";
+    };
+    wilSel.onchange = async () => {
+      const box = document.getElementById("wilHasil");
+      if (!wilSel.value) return;
       box.innerHTML = "⏳ Memuat data BMKG…";
-      const b = await fetchBMKG(sel.value);
+      const b = await fetchBMKG(wilSel.value);
       if (!b){ box.innerHTML = '<span class="err">Gagal memuat.</span>'; return; }
       let t = '<table><tr><th>Hari</th><th>Cuaca</th><th>Hujan</th><th>Suhu max</th></tr>';
       b.days.forEach(d => {
@@ -646,9 +654,7 @@ async function load(){
       });
       box.innerHTML = "<b>🇮🇩 "+esc(b.desa)+", Kec. "+esc(b.kecamatan)+"</b> (BMKG)" + t + "</table>";
     };
-  };
-  setupPicker("desaSel", "desaHasil");
-  setupPicker("kecSel", "kecHasil");
+  }
   document.getElementById("subhead").textContent = "Update: "+now+" • 6 sumber • "+Object.keys(W).length+" wttr, "+Object.keys(BMKG).filter(k=>BMKG[k]).length+" BMKG, arena 5-model";
 }
 
