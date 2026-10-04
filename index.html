@@ -69,6 +69,34 @@
   .v-green{ background:rgba(74,222,128,.15); color:var(--green); }
   .v-yellow{ background:rgba(250,204,21,.15); color:var(--yellow); }
   .v-red{ background:rgba(248,113,113,.15); color:var(--red); }
+  #chatFab{ position:fixed; right:18px; bottom:18px; width:58px; height:58px; border-radius:50%;
+    background:linear-gradient(135deg,var(--accent),var(--accent2)); border:none; font-size:26px;
+    cursor:pointer; box-shadow:0 4px 18px rgba(56,189,248,.4); z-index:50; }
+  #chatFab:active{ transform:scale(.92); }
+  #chatPanel{ position:fixed; right:12px; bottom:86px; width:min(360px,calc(100vw - 24px)); height:480px;
+    max-height:70vh; background:#0f1b30; border:1px solid rgba(56,189,248,.3); border-radius:16px;
+    display:none; flex-direction:column; z-index:50; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,.5); }
+  #chatPanel.open{ display:flex; }
+  #chatHead{ padding:12px 14px; background:linear-gradient(135deg,#0e2a45,#1e293b); font-size:14px; font-weight:700; }
+  #chatHead small{ display:block; font-weight:400; font-size:11px; color:var(--muted); }
+  #chatMsgs{ flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
+  .msg{ max-width:85%; padding:9px 12px; border-radius:12px; font-size:13px; line-height:1.55; }
+  .msg.u{ align-self:flex-end; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#04121f; }
+  .msg.a{ align-self:flex-start; background:#1e293b; border:1px solid rgba(56,189,248,.15); }
+  .msg.a b, .msg.a strong{ color:var(--accent); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; padding:0 12px 8px; }
+  .chip{ font-size:11px; background:#1e293b; border:1px solid rgba(56,189,248,.25); color:var(--accent);
+    border-radius:14px; padding:5px 10px; cursor:pointer; }
+  #chatForm{ display:flex; gap:8px; padding:10px 12px; border-top:1px solid #1e293b; }
+  #chatInput{ flex:1; background:#1e293b; border:1px solid #334155; border-radius:10px; color:var(--text);
+    padding:9px 12px; font-size:13px; outline:none; }
+  #chatSend{ background:linear-gradient(135deg,var(--accent),var(--accent2)); border:none; border-radius:10px;
+    padding:9px 14px; font-weight:700; cursor:pointer; color:#04121f; }
+  #chatKey{ padding:14px; font-size:13px; line-height:1.7; }
+  #chatKey input{ width:100%; background:#1e293b; border:1px solid #334155; border-radius:10px; color:var(--text);
+    padding:9px 12px; font-size:12px; margin:8px 0; outline:none; }
+  #chatKey a{ color:var(--accent); }
+  .typing{ color:var(--muted); font-size:12px; font-style:italic; }
   .src-tag{ font-size:10px; color:var(--muted); border:1px solid #334155; border-radius:6px; padding:1px 6px; margin-left:6px; }
 </style>
 </head>
@@ -314,6 +342,7 @@ async function load(){
 
   // 3) USGS gempa
   const quakes = await fetchQuakes();
+  AI_DATA.quakes = quakes || [];
 
   // 4) BMKG per titik fokus (stagger anti rate-limit)
   const BMKG = {};
@@ -321,6 +350,7 @@ async function load(){
     BMKG[n] = await fetchBMKG(BMKG_ADM4[n]);
     await sleep(350);
   }
+  AI_DATA.bmkg = BMKG;
 
   // 5) Arena model: ECMWF vs GFS vs ICON untuk Gresik & Lamongan
   const ARENA_PTS = [
@@ -343,6 +373,7 @@ async function load(){
   }
 
   const {notes, score} = correlate(W);
+  AI_DATA.score = score;
   const color = score>=70 ? "#f87171" : score>=25 ? "#facc15" : "#4ade80";
   const verdict = score>=70 ? ["🔴 SIAGA","v-red"] : score>=25 ? ["🟡 WASPADA","v-yellow"] : ["🟢 AMAN","v-green"];
   const now = new Date().toLocaleString("id-ID",{day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"});
@@ -356,6 +387,7 @@ async function load(){
     omStats[n] = a;
     allAlerts = allAlerts.concat(a.alerts);
   }
+  AI_DATA.alerts = allAlerts;
   // Alert gempa besar
   const bigQuakes = (quakes||[]).filter(q=>q.mag>=6);
   bigQuakes.forEach(q=>allAlerts.push({sev:"red", icon:"🌏",
@@ -521,6 +553,104 @@ async function load(){
 document.getElementById("refreshBtn").onclick = load;
 load();
 setInterval(load, 30*60*1000);
+
+/* ============ AI CHAT (Gemini, key milik pengunjung) ============ */
+const AI_DATA = { quakes:[], alerts:[], score:0, bmkg:{} };
+const fab = document.getElementById("chatFab"), panel = document.getElementById("chatPanel"),
+      msgs = document.getElementById("chatMsgs"), form = document.getElementById("chatForm"),
+      input = document.getElementById("chatInput"), keyBox = document.getElementById("chatKey");
+let aiHist = [], aiBusy = false;
+
+fab.onclick = () => {
+  panel.classList.toggle("open");
+  const hasKey = !!localStorage.getItem("cuaca_ai_key");
+  keyBox.style.display = hasKey ? "none" : "block";
+  form.style.display = hasKey ? "flex" : "none";
+  document.getElementById("chatChips").style.display = hasKey ? "flex" : "none";
+  if (hasKey && !aiHist.length) aiSay("Halo! 👋 Tanya soal keamanan lokasimu — gempa, megathrust, banjir, atau cuaca ekstrem. Aku jawab pakai data live di halaman ini.");
+};
+document.getElementById("keySave").onclick = () => {
+  const k = document.getElementById("keyInput").value.trim();
+  if (!k) return;
+  localStorage.setItem("cuaca_ai_key", k);
+  fab.onclick();
+};
+document.querySelectorAll(".chip").forEach(c => c.onclick = () => { input.value = c.textContent; form.requestSubmit(); });
+
+function aiSay(t, cls){
+  const d = document.createElement("div");
+  d.className = "msg " + (cls || "a");
+  d.innerHTML = t.replace(/\n/g,"<br>");
+  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+  return d;
+}
+function aiContext(){
+  const q = AI_DATA.quakes.slice(0,5).map(x=>"M"+x.mag.toFixed(1)+" "+x.place+" ("+x.depth+"km)").join("; ") || "tidak ada gempa M≥4.5";
+  const al = AI_DATA.alerts.slice(0,6).map(a=>a.text.replace(/<[^>]+>/g,"")).join("; ") || "tidak ada peringatan aktif";
+  const b = Object.entries(AI_DATA.bmkg).slice(0,4).map(([n,v])=>n+": "+(v&&v.days[0]?v.days[0].desc+" "+v.days[0].tp+"mm":"?")).join("; ");
+  return "DATA LIVE "+new Date().toLocaleDateString("id-ID")+" (sumber: BMKG, USGS, Open-Meteo):\n"
+    + "- Peringatan aktif: "+al+"\n- Gempa 7 hari terakhir (Asia Tenggara): "+q+"\n"
+    + "- Skor korelasi regional: "+AI_DATA.score+"/100\n- Prakiraan BMKG hari ini: "+b;
+}
+const AI_SYS = `Kamu asisten kebencanaan untuk warga Gresik & Lamongan, Jawa Timur. Jawab pertanyaan soal keamanan lokasi, risiko gempa (termasuk megathrust Sunda yang ramai dibahas), banjir, dan cuaca ekstrem.
+
+KONTEKS GEOGRAFI (pakai untuk menjawab):
+- Gresik & Lamongan di pesisir utara Jawa Timur, dataran rendah, dilewati Kali Lamong (risiko banjir kiriman dari hulu/Mojokerto).
+- Megathrust Sunda (selatan Jawa) & Mentawai jaraknya ratusan km — guncangan gempa besar BISA terasa di Jatim, tapi risiko tsunami langsung di Gresik/Lamongan jauh lebih rendah dibanding pesisir selatan Jawa.
+- Sumber gempa yang lebih dekat: sesar lokal Jawa & zona subduksi selatan.
+
+ATURAN KERAS:
+- Gempa TIDAK bisa diprediksi. Jangan pernah bilang "pasti aman, tidak akan ada gempa" atau "akan ada gempa tanggal X".
+- Jangan menakut-nakuti, jangan menenangkan palsu. Jujur, tenang, edukatif.
+- Peringatan resmi selalu rujuk ke BMKG (bmkg.go.id).
+- Selipkan tips kesiapsiagaan praktis bila relevan (tas siaga, titik kumpul, kenali jalur evakuasi).
+- Bahasa Indonesia santai, maksimal ~150 kata kecuali diminta detail. Boleh pakai emoji secukupnya.`;
+
+async function aiSend(text){
+  if (aiBusy) return;
+  aiBusy = true;
+  aiSay(esc(text), "u");
+  input.value = "";
+  const typing = aiSay("<span class='typing'>mengetik…</span>");
+  try{
+    const key = localStorage.getItem("cuaca_ai_key");
+    const body = {
+      system_instruction: { parts: [{ text: AI_SYS + "\n\n" + aiContext() }] },
+      contents: aiHist.concat([{ role:"user", parts:[{text}] }]).slice(-12),
+      generationConfig: { maxOutputTokens: 500, temperature: 0.7 }
+    };
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key="+key,
+      { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error.message || "API error");
+    const ans = (j.candidates && j.candidates[0] && j.candidates[0].content.parts[0].text) || "Maaf, tidak ada jawaban.";
+    typing.remove();
+    aiSay(esc(ans));
+    aiHist.push({ role:"user", parts:[{text}] }, { role:"model", parts:[{text:ans}] });
+  }catch(e){
+    typing.remove();
+    aiSay("⚠️ Gagal menghubungi AI: "+esc(e.message||e)+"<br>Cek API key kamu.");
+  }
+  aiBusy = false;
+}
+form.onsubmit = e => { e.preventDefault(); const t = input.value.trim(); if (t) aiSend(t); };
 </script>
+<button id="chatFab" title="Tanya AI soal keamanan & gempa">💬</button>
+<div id="chatPanel">
+  <div id="chatHead">🤖 Tanya AI<small>Keamanan lokasimu • risiko gempa & megathrust • banjir</small></div>
+  <div id="chatKey" style="display:none">
+    Masukkan <b>Gemini API key</b> kamu (gratis) agar AI bisa menjawab.<br>
+    <input id="keyInput" type="password" placeholder="Tempel API key di sini">
+    <button class="btn" id="keySave" style="width:100%">Simpan key</button>
+    <div style="margin-top:8px;font-size:12px;color:var(--muted)">Belum punya? Buat gratis di <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Key tersimpan hanya di HP kamu.</div>
+  </div>
+  <div id="chatMsgs"></div>
+  <div class="chips" id="chatChips">
+    <span class="chip">Apakah Gresik aman dari gempa?</span>
+    <span class="chip">Apa itu megathrust?</span>
+    <span class="chip">Risiko banjir minggu ini?</span>
+  </div>
+  <form id="chatForm"><input id="chatInput" placeholder="Tanya soal keamanan daerahmu…" autocomplete="off"><button id="chatSend" type="submit">➤</button></form>
+</div>
 </body>
 </html>
